@@ -1,6 +1,7 @@
 /**
- * Google Docs API で本文末尾へ追記（batchUpdate insertText）。
+ * Google Docs API で本文末尾へ追記（batchUpdate insertText のみ）。
  * Phase 8: バッファをデバウンスしてフラッシュ、失敗時はリトライしキューを戻す。
+ * Phase 9: 各行にプレフィックスを付け、人間の補足（例: [補足]）と区別。既存範囲の置換は行わない。
  */
 
 import { google } from "googleapis";
@@ -31,6 +32,9 @@ function sleep(ms) {
 }
 
 /**
+ * 本文の「最後の構造要素」の直前インデックス。ここにだけ insertText するため、
+ * 人間が既に書いた上の段落を API で上書きすることはない。
+ *
  * @param {{ content?: { endIndex?: number | null }[] }} [body]
  * @returns {number}
  */
@@ -44,6 +48,15 @@ function getInsertIndex(body) {
     return 1;
   }
   return Math.max(1, last.endIndex - 1);
+}
+
+/**
+ * 未設定時は要件の「補足記号」と揃えて [自動] を付与。空文字にすると無効。
+ * @returns {string}
+ */
+function getTranscriptLinePrefix() {
+  const raw = process.env.RELAY_DOCS_LINE_PREFIX;
+  return raw === undefined ? "[自動] " : raw;
 }
 
 /**
@@ -155,7 +168,11 @@ export function createTranscriptBuffer(sessionDoc) {
       return;
     }
 
-    const payload = `${lines.join("\n")}\n`;
+    const prefix = getTranscriptLinePrefix();
+    const prefixed = prefix
+      ? lines.map((line) => `${prefix}${line}`)
+      : lines;
+    const payload = `${prefixed.join("\n")}\n`;
 
     flushing = true;
     try {
