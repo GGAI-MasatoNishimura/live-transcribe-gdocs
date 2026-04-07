@@ -1,0 +1,13 @@
+{
+  "name": "live-transcribe-relay",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "ローカル中継: Meet 音声を受け、STT と Google Docs へつなぐ（MVP 段階的実装）",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
