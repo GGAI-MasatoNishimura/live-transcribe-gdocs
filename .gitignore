@@ -1,0 +1,8 @@
+# 依存・秘密情報（将来の拡張用）
+node_modules/
+.env
+.env.*
+
+# OS・エディタ
+.DS_Store
+Thumbs.db
