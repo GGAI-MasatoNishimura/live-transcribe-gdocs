@@ -99,21 +99,23 @@ function getTabCaptureStreamId(tabId) {
 }
 
 /**
+ * 前面（アクティブ）のタブが Meet のときだけその tabId を返す。
+ * 別タブでドキュメントを開いたままバックグラウンドの Meet を取ろうとすると、
+ * Chrome が「activeTab / 起動コンテキスト」との整合で getMediaStreamId を拒否することがある。
+ *
  * @returns {Promise<number | null>}
  */
 async function getMeetTargetTabId() {
-  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (
-    active?.id != null &&
-    typeof active.url === "string" &&
-    active.url.startsWith("https://meet.google.com/")
-  ) {
-    return active.id;
+  const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (active?.id == null || typeof active.url !== "string") {
+    return null;
   }
-  const meetTabs = await chrome.tabs.query({ url: ["https://meet.google.com/*"] });
-  const first = meetTabs[0];
-  if (first?.id != null) {
-    return first.id;
+  const url = active.url;
+  if (url.startsWith("chrome://") || url.startsWith("chrome-extension://") || url.startsWith("devtools://")) {
+    return null;
+  }
+  if (url.startsWith("https://meet.google.com/")) {
+    return active.id;
   }
   return null;
 }
@@ -127,7 +129,7 @@ async function startMeetAudioCapture() {
     return {
       ok: false,
       message:
-        "Google Meet のタブ（meet.google.com）を開いてから、もう一度「記録開始」してください。",
+        "タブ音声の取得には、Google Meet に参加している画面を「手前のタブ」にしてから「記録開始」してください。Google ドキュメントだけを前面にしたままだと、ブラウザが拒否することがあります（chrome:// の画面で開いているときも不可）。",
     };
   }
 

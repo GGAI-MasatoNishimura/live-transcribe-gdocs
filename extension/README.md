@@ -31,12 +31,12 @@
 
 ## Phase 6 までに含まれるもの
 
-- `tabCapture` と `tabs`、および `https://meet.google.com/*` の権限
-- アクティブなタブが Meet のときはそのタブ、そうでなければ開いている Meet タブのいずれかから Tab Capture で音声を取得
+- `tabCapture` と `tabs` と `activeTab`、および `https://meet.google.com/*` の権限
+- **前面（アクティブ）のタブが `https://meet.google.com/` のときだけ** そのタブから Tab Capture で音声を取得する（Google ドキュメントを前面にしたままバックグラウンドの Meet を取ると、Chrome が `getMediaStreamId` を拒否することがある）
 - `MediaRecorder` で約 1 秒ごとにチャンク化し、WebSocket で relay にバイナリ送信（WebM 断片）
-- Meet タブが無い・取得に失敗したときはメッセージを出してセッションを打ち切る
+- Meet が前面でない・取得に失敗したときはメッセージを出してセッションを打ち切る
 
-**動作確認の手順:** relay を起動したうえで、**Google Meet に参加したタブを開いた状態**でポップアップから記録開始する。relay のコンソールに `binary audio chunk` のログが増えれば音声が届いています。
+**動作確認の手順:** relay を起動したうえで、**Meet に参加しているタブをクリックして手前に出した状態**で拡張のポップアップを開き、URL を入れて記録開始する。relay のコンソールに `binary audio chunk` のログが増えれば音声が届いています。
 
 ポップアップを閉じるとキャプチャと WebSocket は止まります（後続で Service Worker / Offscreen に移せる）。
 
