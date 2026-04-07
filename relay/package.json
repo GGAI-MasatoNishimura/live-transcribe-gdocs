@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "ローカル中継: Meet 音声を受け、STT と Google Docs へつなぐ（MVP 段階的実装）",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
   "scripts": {
     "start": "node src/index.js"
   },
