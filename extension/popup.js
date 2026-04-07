@@ -1,6 +1,7 @@
 /**
  * Phase 2: ポップアップ UI と URL 検証。
- * Phase 5: 記録中はローカル中継へ WebSocket 接続（音声・STT は未接続）。
+ * Phase 5: ローカル中継へ WebSocket。
+ * Phase 6: Google Meet タブの Tab Capture 音声を MediaRecorder でチャンク化し relay へ送信。
  */
 
 const RELAY_WS_URL = "ws://127.0.0.1:8765";
@@ -20,6 +21,13 @@ const statusEl = document.getElementById("status");
 let relaySocket = null;
 /** ユーザーが「記録停止」を押して閉じたとき true（異常切断と区別） */
 let relayCloseRequested = false;
+/** 接続切断時に表示するメッセージ（Meet 未取得など）。通常の停止より優先 */
+let closeStatusOverride = null;
+
+/** @type {MediaRecorder | null} */
+let mediaRecorder = null;
+/** @type {MediaStream | null} */
+let captureStream = null;
 
 function extractDocumentId(url) {
   const s = String(url).trim();
@@ -53,7 +61,173 @@ function applyRecordingUi(isRecording) {
   }
 }
 
+function stopTabCapture() {
+  if (mediaRecorder) {
+    try {
+      if (mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    mediaRecorder = null;
+  }
+  if (captureStream) {
+    captureStream.getTracks().forEach((t) => t.stop());
+    captureStream = null;
+  }
+}
+
+/**
+ * @param {number} tabId
+ * @returns {Promise<string>}
+ */
+function getTabCaptureStreamId(tabId) {
+  return new Promise((resolve, reject) => {
+    chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (streamId) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      if (!streamId) {
+        reject(new Error("ストリーム ID を取得できませんでした"));
+        return;
+      }
+      resolve(streamId);
+    });
+  });
+}
+
+/**
+ * @returns {Promise<number | null>}
+ */
+async function getMeetTargetTabId() {
+  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (
+    active?.id != null &&
+    typeof active.url === "string" &&
+    active.url.startsWith("https://meet.google.com/")
+  ) {
+    return active.id;
+  }
+  const meetTabs = await chrome.tabs.query({ url: ["https://meet.google.com/*"] });
+  const first = meetTabs[0];
+  if (first?.id != null) {
+    return first.id;
+  }
+  return null;
+}
+
+/**
+ * @returns {Promise<{ ok: true } | { ok: false, message: string }>}
+ */
+async function startMeetAudioCapture() {
+  const tabId = await getMeetTargetTabId();
+  if (tabId == null) {
+    return {
+      ok: false,
+      message:
+        "Google Meet のタブ（meet.google.com）を開いてから、もう一度「記録開始」してください。",
+    };
+  }
+
+  let streamId;
+  try {
+    streamId = await getTabCaptureStreamId(tabId);
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    return {
+      ok: false,
+      message: `タブ音声の許可に失敗しました: ${err.message}`,
+    };
+  }
+
+  const constraints = {
+    audio: {
+      mandatory: {
+        chromeMediaSource: "tab",
+        chromeMediaSourceId: streamId,
+      },
+    },
+    video: false,
+  };
+
+  try {
+    captureStream = await navigator.mediaDevices.getUserMedia(
+      /** @type {MediaStreamConstraints} */ (constraints),
+    );
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    return {
+      ok: false,
+      message: `タブ音声ストリームを取得できませんでした: ${err.message}`,
+    };
+  }
+
+  const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+    ? "audio/webm;codecs=opus"
+    : MediaRecorder.isTypeSupported("audio/webm")
+      ? "audio/webm"
+      : "";
+
+  const recorderOptions = mimeType ? { mimeType } : {};
+  try {
+    mediaRecorder = new MediaRecorder(captureStream, recorderOptions);
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    captureStream.getTracks().forEach((t) => t.stop());
+    captureStream = null;
+    return {
+      ok: false,
+      message: `MediaRecorder を開始できませんでした: ${err.message}`,
+    };
+  }
+
+  mediaRecorder.addEventListener("dataavailable", async (ev) => {
+    if (!ev.data || ev.data.size === 0) {
+      return;
+    }
+    const socket = relaySocket;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    const buf = await ev.data.arrayBuffer();
+    socket.send(buf);
+  });
+
+  mediaRecorder.addEventListener("error", (ev) => {
+    console.error("[popup] MediaRecorder error", ev);
+  });
+
+  const sliceMs = 1000;
+  try {
+    mediaRecorder.start(sliceMs);
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    stopTabCapture();
+    return {
+      ok: false,
+      message: `録音の開始に失敗しました: ${err.message}`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * 中継へ接続できたあと Meet 取得に失敗したときなど、セッションを打ち切る。
+ * @param {string} message
+ */
+function failSession(message) {
+  closeStatusOverride = message;
+  relayCloseRequested = true;
+  stopTabCapture();
+  if (relaySocket) {
+    relaySocket.close();
+  }
+}
+
 function disconnectRelay() {
+  stopTabCapture();
   if (!relaySocket) {
     return;
   }
@@ -74,15 +248,27 @@ function connectRelay(documentId) {
         documentId,
       }),
     );
-    setStatus("記録中（中継と接続済み。音声・文字起こしは未接続）");
+    setStatus("記録中（中継と接続済み。Meet 音声の準備を待っています）");
   });
 
-  socket.addEventListener("message", (event) => {
+  socket.addEventListener("message", async (event) => {
     const text = typeof event.data === "string" ? event.data : "";
     try {
       const msg = JSON.parse(text);
       if (msg && msg.type === "ack") {
-        setStatus("記録中（中継がドキュメント ID を受け取りました）");
+        setStatus("記録中（Meet のタブ音声を準備しています）");
+        try {
+          const result = await startMeetAudioCapture();
+          if (!result.ok) {
+            failSession(result.message);
+            return;
+          }
+          setStatus("記録中（Meet のタブ音声を中継へ送信中。文字起こしは未接続）");
+        } catch (e) {
+          console.error(e);
+          const err = e instanceof Error ? e : new Error(String(e));
+          failSession(`タブ音声の取得に失敗しました: ${err.message}`);
+        }
       }
     } catch {
       /* 非 JSON は無視 */
@@ -91,10 +277,18 @@ function connectRelay(documentId) {
 
   socket.addEventListener("close", () => {
     relaySocket = null;
+    const override = closeStatusOverride;
+    closeStatusOverride = null;
     const userStopped = relayCloseRequested;
     relayCloseRequested = false;
 
     void chrome.storage.local.set({ [STORAGE_KEYS.recording]: false });
+
+    if (override) {
+      applyRecordingUi(false);
+      setStatus(override);
+      return;
+    }
 
     if (userStopped) {
       applyRecordingUi(false);

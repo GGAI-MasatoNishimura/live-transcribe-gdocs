@@ -29,4 +29,15 @@
 
 **動作確認の手順:** 先に [relay/](../relay/) で `npm start` を起動してから、拡張機能を再読み込みし、記録開始を押す。
 
-以降のフェーズで TabCapture・音声送信・STT・Docs 追記を接続する。
+## Phase 6 までに含まれるもの
+
+- `tabCapture` と `tabs`、および `https://meet.google.com/*` の権限
+- アクティブなタブが Meet のときはそのタブ、そうでなければ開いている Meet タブのいずれかから Tab Capture で音声を取得
+- `MediaRecorder` で約 1 秒ごとにチャンク化し、WebSocket で relay にバイナリ送信（WebM 断片）
+- Meet タブが無い・取得に失敗したときはメッセージを出してセッションを打ち切る
+
+**動作確認の手順:** relay を起動したうえで、**Google Meet に参加したタブを開いた状態**でポップアップから記録開始する。relay のコンソールに `binary audio chunk` のログが増えれば音声が届いています。
+
+ポップアップを閉じるとキャプチャと WebSocket は止まります（後続で Service Worker / Offscreen に移せる）。
+
+以降のフェーズで STT・Docs 追記を接続する。

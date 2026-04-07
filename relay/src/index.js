@@ -18,9 +18,16 @@ wss.on("connection", (socket, req) => {
   const remote = req.socket?.remoteAddress ?? "?";
   console.log(`[relay] client connected from ${remote}`);
 
+  let binaryChunkCount = 0;
+
   socket.on("message", (data, isBinary) => {
     if (isBinary) {
-      console.log(`[relay] binary message (${data.length} bytes)`);
+      binaryChunkCount += 1;
+      if (binaryChunkCount <= 3 || binaryChunkCount % 20 === 0) {
+        console.log(
+          `[relay] binary audio chunk #${binaryChunkCount} (${data.length} bytes)`,
+        );
+      }
       return;
     }
     const text = data.toString();
