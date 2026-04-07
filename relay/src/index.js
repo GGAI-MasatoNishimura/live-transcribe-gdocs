@@ -26,6 +26,20 @@ wss.on("connection", (socket, req) => {
     const text = data.toString();
     const preview = text.length > 500 ? `${text.slice(0, 500)}…` : text;
     console.log(`[relay] text message: ${preview}`);
+    try {
+      const msg = JSON.parse(text);
+      if (msg && msg.type === "hello") {
+        socket.send(
+          JSON.stringify({
+            type: "ack",
+            documentId: typeof msg.documentId === "string" ? msg.documentId : null,
+          }),
+        );
+        console.log("[relay] sent ack for hello");
+      }
+    } catch {
+      /* 非 JSON はログのみ */
+    }
   });
 
   socket.on("close", (code, reason) => {
