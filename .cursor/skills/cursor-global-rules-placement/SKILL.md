@@ -24,7 +24,7 @@ description: >-
 ## 従う手順
 
 1. **グローバル向けの運用ルールの長文**は、**`.cursor/rules` に置かない**（メタの短い誤防止ルール用 `.mdc` は別）。
-2. このリポジトリでは、貼り付け用の正本を **`docs/cursor-user-rules-global.md`** に置く。ユーザーには **Cursor → Settings → Rules（User Rules）** へこの内容をコピーするよう案内する。
+2. このリポジトリでは、`.gitignore` 運用の貼り付け正本を **`docs/cursor-user-rules-gitignore.md`** に置く（ブランチ運用は既存 User Rules）。ユーザーには **Cursor → Settings → Rules（User Rules）** へこの内容をコピーするよう案内する。
 3. **チーム全員に同じルールをリポジトリで配布したい**場合のみ、**Project Rules** に書く。
 4. **User Rules と Project Rules に同じ長文を二重に書かない**。
 

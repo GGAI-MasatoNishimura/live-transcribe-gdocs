@@ -15,6 +15,6 @@ alwaysApply: true
 ## エージェント向け（同じミスをしない）
 
 1. ユーザーが「**グローバル**」「**全プロジェクト**」「**Cursor 全体**」と言ったら、**運用ルールの長文を `.cursor/rules` に新規作成しない**。User Rules へ移す案内をする。
-2. **グローバル向けの本文の正本**は **`docs/cursor-user-rules-global.md`**。更新するときはこのファイルを編集し、ユーザーに **User Rules へ再貼り付け**してもらう（Cursor がユーザーの設定ファイルを直接書き換えられない場合がある）。
+2. **`.gitignore` 運用など User Rules 追記の正本**は **`docs/cursor-user-rules-gitignore.md`**（ブランチ運用は既存 User Rules）。更新するときはこのファイルを編集し、ユーザーに **User Rules へ再貼り付け**してもらう（Cursor がユーザーの設定ファイルを直接書き換えられない場合がある）。
 3. **チームで Git 共有したい**、**このリポだけの例外**が必要なときだけ、**Project Rules**（`.cursor/rules`）に書く。
 4. **User Rules と Project Rules に同趣旨の長文を二重に書かない**。
