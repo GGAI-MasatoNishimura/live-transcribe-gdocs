@@ -1,0 +1,20 @@
+---
+description: グローバルルールとプロジェクトルールの置き場所（誤配置防止）
+alwaysApply: true
+---
+
+# Cursor ルールの置き場所（必ず守る）
+
+## 用語の対応（公式）
+
+- **グローバル（全ワークスペース）** → Cursor **Settings の User Rules**。リポジトリのファイルでは代替できない。
+- **プロジェクト共有** → **`.cursor/rules/*.mdc`**（またはチーム運用で定められた形式）。クローンした人にも同じ前提を渡すとき使う。
+
+公式: https://docs.cursor.com/context/rules
+
+## エージェント向け（同じミスをしない）
+
+1. ユーザーが「**グローバル**」「**全プロジェクト**」「**Cursor 全体**」と言ったら、**運用ルールの長文を `.cursor/rules` に新規作成しない**。User Rules へ移す案内をする。
+2. **グローバル向けの本文の正本**は **`docs/cursor-user-rules-global.md`**。更新するときはこのファイルを編集し、ユーザーに **User Rules へ再貼り付け**してもらう（Cursor がユーザーの設定ファイルを直接書き換えられない場合がある）。
+3. **チームで Git 共有したい**、**このリポだけの例外**が必要なときだけ、**Project Rules**（`.cursor/rules`）に書く。
+4. **User Rules と Project Rules に同趣旨の長文を二重に書かない**。
