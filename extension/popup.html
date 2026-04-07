@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Transcribe</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+
+<body>
+  <main class="panel">
+    <h1 class="title">出力先ドキュメント</h1>
+    <label class="label" for="docUrl">Google ドキュメント URL</label>
+    <input
+      id="docUrl"
+      class="input"
+      type="url"
+      placeholder="https://docs.google.com/document/d/.../edit"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <p id="docIdHint" class="hint" hidden></p>
+    <div class="actions">
+      <button id="btnStart" type="button" class="btn btn-primary">記録開始</button>
+      <button id="btnStop" type="button" class="btn btn-secondary" disabled>記録停止</button>
+    </div>
+    <p id="status" class="status" role="status">待機中</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+
+</html>

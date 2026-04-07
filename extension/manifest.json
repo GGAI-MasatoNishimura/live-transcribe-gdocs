@@ -1,9 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Live Transcribe to Google Docs",
-  "version": "0.0.1",
-  "description": "MVP Phase1: ディレクトリと Manifest のみ。UI は Phase2 で追加する。",
+  "version": "0.0.2",
+  "description": "MVP: Meet 音声を文字起こしし Google ドキュメントへ追記（段階的実装中）。",
+  "permissions": ["storage"],
   "action": {
-    "default_title": "Live Transcribe to Google Docs"
+    "default_title": "Live Transcribe to Google Docs",
+    "default_popup": "popup.html"
   }
 }
