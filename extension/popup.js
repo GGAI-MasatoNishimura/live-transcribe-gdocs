@@ -257,6 +257,12 @@ function connectRelay(documentId) {
     const text = typeof event.data === "string" ? event.data : "";
     try {
       const msg = JSON.parse(text);
+      if (msg && msg.type === "transcript" && typeof msg.text === "string") {
+        const t = msg.text.trim();
+        const short = t.length > 120 ? `${t.slice(0, 120)}…` : t;
+        setStatus(`記録中（文字起こし） ${short}`);
+        return;
+      }
       if (msg && msg.type === "ack") {
         setStatus("記録中（Meet のタブ音声を準備しています）");
         try {
@@ -265,7 +271,9 @@ function connectRelay(documentId) {
             failSession(result.message);
             return;
           }
-          setStatus("記録中（Meet のタブ音声を中継へ送信中。文字起こしは未接続）");
+          setStatus(
+            "記録中（Meet 音声を中継へ送信中。relay が Google STT する場合は数秒ごとに文字が届きます）",
+          );
         } catch (e) {
           console.error(e);
           const err = e instanceof Error ? e : new Error(String(e));

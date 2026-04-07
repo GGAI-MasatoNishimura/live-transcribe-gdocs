@@ -40,4 +40,11 @@
 
 ポップアップを閉じるとキャプチャと WebSocket は止まります（後続で Service Worker / Offscreen に移せる）。
 
-以降のフェーズで STT・Docs 追記を接続する。
+## Phase 7 までに含まれるもの（relay 側）
+
+- `GOOGLE_APPLICATION_CREDENTIALS` を設定したとき、relay が受け取った WebM を ffmpeg で PCM 化し、**Google Cloud Speech-to-Text** で文字起こし（同期 recognize、確定テキストのみ扱う）
+- 結果は WebSocket で `transcript` メッセージとして拡張へ送り、ポップアップのステータスに短く表示する
+
+認証キーが無い環境では従来どおりバイナリ受信ログのみです。
+
+以降のフェーズで Google ドキュメント追記を接続する。
