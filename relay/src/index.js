@@ -1,9 +1,11 @@
 /**
  * Phase 4: localhost WebSocket。
- * Phase 7: バッファした WebM を ffmpeg で PCM 化し、Google Cloud Speech-to-Text で文字起こし。
+ * Phase 7: WebM → PCM → Google Speech-to-Text。
+ * Phase 8: 確定テキストをバッファし Google Docs 末尾へ追記。
  */
 
 import { WebSocketServer } from "ws";
+import { createTranscriptBuffer, isDocsApiConfigured } from "./docsAppend.js";
 import { isSttConfigured } from "./googleStt.js";
 import { createSttSession } from "./sttSession.js";
 
@@ -21,13 +23,33 @@ wss.on("listening", () => {
       "[relay] STT: GOOGLE_APPLICATION_CREDENTIALS が無いため、音声はログのみ（文字起こしはスキップ）",
     );
   }
+  if (isDocsApiConfigured()) {
+    console.log(
+      "[relay] Docs API: 同じ認証情報でドキュメント末尾追記を試みます（ドキュメントをサービスアカウントに共有してください）",
+    );
+  } else {
+    console.log(
+      "[relay] Docs API: 認証情報が無いため追記しません",
+    );
+  }
 });
 
 wss.on("connection", (socket, req) => {
   const remote = req.socket?.remoteAddress ?? "?";
   console.log(`[relay] client connected from ${remote}`);
 
-  const stt = createSttSession(socket);
+  const sessionDoc = { id: null };
+  const sessionClosed = { current: false };
+  const docBuffer = createTranscriptBuffer(sessionDoc);
+
+  const stt = createSttSession(socket, {
+    onFinalTranscript: (text) => {
+      if (sessionClosed.current) {
+        return;
+      }
+      docBuffer.enqueue(text);
+    },
+  });
 
   let binaryChunkCount = 0;
 
@@ -48,10 +70,13 @@ wss.on("connection", (socket, req) => {
     try {
       const msg = JSON.parse(text);
       if (msg && msg.type === "hello") {
+        if (typeof msg.documentId === "string" && msg.documentId.length > 0) {
+          sessionDoc.id = msg.documentId;
+        }
         socket.send(
           JSON.stringify({
             type: "ack",
-            documentId: typeof msg.documentId === "string" ? msg.documentId : null,
+            documentId: sessionDoc.id,
           }),
         );
         console.log("[relay] sent ack for hello");
@@ -62,7 +87,9 @@ wss.on("connection", (socket, req) => {
   });
 
   socket.on("close", (code, reason) => {
+    sessionClosed.current = true;
     stt.dispose();
+    void docBuffer.dispose();
     const r = reason?.length ? reason.toString() : "";
     console.log(`[relay] client closed code=${code}${r ? ` reason=${r}` : ""}`);
   });

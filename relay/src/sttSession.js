@@ -7,9 +7,12 @@ import { isSttConfigured, transcribeLinear16Pcm } from "./googleStt.js";
 
 /**
  * @param {{ readyState: number, send: (data: string) => void }} socket
+ * @param {{ onFinalTranscript?: (text: string) => void }} [options]
  * @returns {{ pushBinary: (buf: Buffer) => void, dispose: () => void }}
  */
-export function createSttSession(socket) {
+export function createSttSession(socket, options = {}) {
+  const { onFinalTranscript } = options;
+
   if (!isSttConfigured()) {
     return {
       pushBinary() {},
@@ -59,6 +62,9 @@ export function createSttSession(socket) {
           }),
         );
         console.log(`[relay] transcript: ${text}`);
+        if (typeof onFinalTranscript === "function") {
+          onFinalTranscript(text);
+        }
       }
     } finally {
       busy = false;
