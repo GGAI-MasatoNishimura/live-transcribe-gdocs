@@ -51,12 +51,12 @@ function getInsertIndex(body) {
 }
 
 /**
- * 未設定時は要件の「補足記号」と揃えて [自動] を付与。空文字にすると無効。
+ * 未設定時は [Gemini] を行頭プレフィックスとして付与。空文字にすると無効。
  * @returns {string}
  */
 function getTranscriptLinePrefix() {
   const raw = process.env.RELAY_DOCS_LINE_PREFIX;
-  return raw === undefined ? "[自動] " : raw;
+  return raw === undefined ? "[Gemini] " : raw;
 }
 
 /**
