@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>マイク録音 — Live Transcribe</title>
+  <title>録音（Meet + マイク）— Live Transcribe</title>
   <link rel="stylesheet" href="popup.css" />
   <style>
     body {
@@ -48,23 +48,25 @@
 
 <body>
   <main class="panel">
-    <h1 class="mic-title">マイクで文字起こし（録音タブ）</h1>
+    <h1 class="mic-title">録音（Meet + マイク）</h1>
     <p class="mic-lead">
-      録音中はこのタブを開いたままにしてください。終わったら「録音停止」を押すと接続を切ってこのタブを閉じます。
+      Meet のタブ音声とマイクをミックスして文字起こしします。録音中はこのタブを閉じないでください。終わったら「録音停止」で接続を切り、このタブを閉じます。
     </p>
     <p class="mic-tip">
-      Meet のタブを開いたままだと、こちらのタブに切り替えたときに Meet から「ピクチャーインザピクチャー」の案内が出ることがあります（拡張とは別です）。不要なら閉じるか「許可しない」でかまいません。マイクの許可ダイアログは、下のボタンを押したときだけ出ます。
+      Meet から「ピクチャーインザピクチャー」の案内が出ることがあります（拡張とは別です）。不要なら閉じるか「許可しない」でかまいません。Meet のタブ音とマイクの許可は、下のボタンを押したあとに順に出ます。
     </p>
     <p id="docIdHint" class="hint" hidden></p>
     <div class="actions actions-row">
       <button id="btnAllowMic" type="button" class="btn btn-primary" disabled>
-        マイクを許可して録音開始
+        Meet とマイクを許可して録音開始
       </button>
       <button id="btnStop" type="button" class="btn btn-secondary" disabled>録音停止</button>
     </div>
     <p id="status" class="status" role="status">準備中…</p>
   </main>
   <script src="relayShared.js"></script>
+  <script src="meetCapture.js"></script>
+  <script src="audioMix.js"></script>
   <script src="mic.js"></script>
 </body>
 

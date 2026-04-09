@@ -1,9 +1,9 @@
 /**
- * マイクモード専用ページ: ポップアップが閉じても getUserMedia の許可が途切れにくい。
+ * 録音ページ: Meet タブ音声 + マイクをミックスして relay へ送信。
  */
 
 const STORAGE_KEYS = {
-  pendingMicSession: "pendingMicSession",
+  pendingMixSession: "pendingMixSession",
   recording: "recording",
 };
 
@@ -17,14 +17,18 @@ let relaySocket = null;
 let relayCloseRequested = false;
 /** @type {MediaRecorder | null} */
 let mediaRecorder = null;
-/** @type {MediaStream | null} */
+/** ミックス後の MediaRecorder 入力（解放は mixDispose 側） */
 let captureStream = null;
+/** @type {(() => Promise<void>) | null} */
+let mixDispose = null;
+/** @type {number | null} */
+let meetTabIdForMix = null;
 
 function setStatus(message) {
   statusEl.textContent = message;
 }
 
-function cleanupRecordingOnly() {
+async function cleanupRecordingOnly() {
   if (mediaRecorder) {
     try {
       if (mediaRecorder.state !== "inactive") {
@@ -35,10 +39,15 @@ function cleanupRecordingOnly() {
     }
     mediaRecorder = null;
   }
-  if (captureStream) {
-    captureStream.getTracks().forEach((t) => t.stop());
-    captureStream = null;
+  if (mixDispose) {
+    try {
+      await mixDispose();
+    } catch (_) {
+      /* ignore */
+    }
+    mixDispose = null;
   }
+  captureStream = null;
   btnStop.disabled = true;
   if (btnAllowMic) {
     btnAllowMic.disabled = true;
@@ -84,7 +93,8 @@ function closeThisMicTab() {
   }
 }
 
-function connectMicSession(documentId) {
+function connectMixSession(documentId, meetTabId) {
+  meetTabIdForMix = meetTabId;
   relayCloseRequested = false;
   const socket = new WebSocket(window.LTG_RELAY_WS_URL);
   relaySocket = socket;
@@ -96,7 +106,7 @@ function connectMicSession(documentId) {
         documentId,
       }),
     );
-    setStatus("中継に接続しました。準備ができたら下の「マイクを許可して録音開始」を押してください。");
+    setStatus("中継に接続しました。準備ができたら下のボタンで Meet 音声とマイクの許可を進めてください。");
   });
 
   socket.addEventListener("message", async (event) => {
@@ -114,7 +124,7 @@ function connectMicSession(documentId) {
           btnAllowMic.disabled = false;
         }
         setStatus(
-          "中継とつながりました。Meet 側のピクチャーインザピクチャー案内が出ていたら片付けてから、下のボタンでマイクを許可してください。",
+          "中継とつながりました。Meet のピクチャーインザピクチャー案内が出ていたら片付けてから、下のボタンを押してください。",
         );
       }
     } catch {
@@ -124,8 +134,8 @@ function connectMicSession(documentId) {
 
   socket.addEventListener("close", () => {
     relaySocket = null;
-    cleanupRecordingOnly();
     if (!relayCloseRequested) {
+      void cleanupRecordingOnly();
       setStatus("中継との接続が切れました。relay で npm start しているか確認してください。");
     }
   });
@@ -136,78 +146,108 @@ function connectMicSession(documentId) {
 }
 
 /**
- * ack 受信後にユーザーがボタンで明示したときだけ getUserMedia する（Meet の PiP 案内と同時に出さない）。
+ * Meet タブ音声 + マイクをミックスして録音開始。
  */
-async function startMicAfterUserGesture() {
+async function startMixAfterUserGesture() {
   const socket = relaySocket;
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     setStatus("中継に接続していません。ページを開き直すか、relay を起動してください。");
     return;
   }
+  if (meetTabIdForMix == null) {
+    setStatus("Meet タブ ID がありません。ポップアップからやり直してください。");
+    return;
+  }
   if (btnAllowMic) {
     btnAllowMic.disabled = true;
   }
-  setStatus("マイクの許可を求めています…");
+  setStatus("Meet のタブ音声を取得しています…");
+  let tabStream;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    captureStream = stream;
-    const r = await window.ltgStartMediaRecorder(socket, stream);
-    if (!r.ok) {
-      stream.getTracks().forEach((t) => t.stop());
-      captureStream = null;
-      setStatus(r.message);
-      closeSocketOnly();
-      cleanupRecordingOnly();
-      if (btnAllowMic) {
-        btnAllowMic.disabled = false;
-      }
-      return;
-    }
-    mediaRecorder = r.mediaRecorder;
-    btnStop.disabled = false;
-    setStatus(
-      "録音中。relay が Google STT する場合は数秒ごとに文字がドキュメントへ届きます。このタブは閉じないでください。",
-    );
+    tabStream = await window.ltgGetMeetTabAudioStream(meetTabIdForMix);
   } catch (e) {
-    const errMsg = window.ltgFormatMicAccessError(e);
-    setStatus(errMsg);
-    closeSocketOnly();
-    cleanupRecordingOnly();
+    const err = e instanceof Error ? e : new Error(String(e));
+    setStatus(`Meet のタブ音声を取得できませんでした: ${err.message}`);
     if (btnAllowMic) {
       btnAllowMic.disabled = false;
     }
+    return;
   }
+
+  setStatus("マイクの許可を求めています…");
+  let micStream;
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    tabStream.getTracks().forEach((t) => t.stop());
+    const errMsg = window.ltgFormatMicAccessError(e);
+    setStatus(errMsg);
+    if (btnAllowMic) {
+      btnAllowMic.disabled = false;
+    }
+    return;
+  }
+
+  setStatus("音声をミックスしています…");
+  const mixed = window.ltgMixTwoAudioStreams(tabStream, micStream);
+  mixDispose = mixed.dispose;
+  captureStream = mixed.stream;
+
+  const r = await window.ltgStartMediaRecorder(socket, mixed.stream);
+  if (!r.ok) {
+    await cleanupRecordingOnly();
+    setStatus(r.message);
+    closeSocketOnly();
+    if (btnAllowMic) {
+      btnAllowMic.disabled = false;
+    }
+    meetTabIdForMix = null;
+    return;
+  }
+  mediaRecorder = r.mediaRecorder;
+  btnStop.disabled = false;
+  setStatus(
+    "録音中（Meet + マイク）。relay が Google STT する場合は数秒ごとに文字がドキュメントへ届きます。このタブは閉じないでください。",
+  );
 }
 
 if (btnAllowMic) {
   btnAllowMic.addEventListener("click", () => {
-    void startMicAfterUserGesture();
+    void startMixAfterUserGesture();
   });
 }
 
 btnStop.addEventListener("click", () => {
-  relayCloseRequested = true;
-  closeSocketOnly();
-  setStatus("録音を終了しました…");
-  closeThisMicTab();
+  void (async () => {
+    relayCloseRequested = true;
+    await cleanupRecordingOnly();
+    closeSocketOnly();
+    setStatus("録音を終了しました…");
+    closeThisMicTab();
+  })();
 });
 
 (async function init() {
-  const data = await chrome.storage.local.get(STORAGE_KEYS.pendingMicSession);
-  const pending = data[STORAGE_KEYS.pendingMicSession];
-  if (!pending || typeof pending.documentId !== "string" || !pending.documentId.length) {
+  const data = await chrome.storage.local.get(STORAGE_KEYS.pendingMixSession);
+  const pending = data[STORAGE_KEYS.pendingMixSession];
+  if (
+    !pending ||
+    typeof pending.documentId !== "string" ||
+    !pending.documentId.length ||
+    pending.meetTabId == null
+  ) {
     setStatus(
-      "セッション情報がありません。拡張のポップアップで「マイク」を選び、記録開始からやり直してください。",
+      "セッション情報がありません。拡張のポップアップで、記録開始の直前に Google Meet を手前に表示してからやり直してください。",
     );
     return;
   }
 
-  await chrome.storage.local.remove(STORAGE_KEYS.pendingMicSession);
+  await chrome.storage.local.remove(STORAGE_KEYS.pendingMixSession);
 
   docIdHint.hidden = false;
   docIdHint.textContent = `ドキュメント ID: ${pending.documentId}`;
 
-  connectMicSession(pending.documentId);
+  connectMixSession(pending.documentId, pending.meetTabId);
 })().catch((err) => {
   console.error(err);
   setStatus("初期化に失敗しました");
