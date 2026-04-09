@@ -189,7 +189,9 @@ async function startMixAfterUserGesture() {
   }
 
   setStatus("音声をミックスしています…");
-  const mixed = window.ltgMixTwoAudioStreams(tabStream, micStream);
+  const mixed = window.ltgMixTwoAudioStreams(tabStream, micStream, {
+    meetTabMonitorGain: 1,
+  });
   mixDispose = mixed.dispose;
   captureStream = mixed.stream;
 

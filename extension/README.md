@@ -32,7 +32,7 @@
 
 - `tabCapture` と `tabs` と `activeTab`、および `https://meet.google.com/*` の権限
 - **記録開始を押した瞬間**にアクティブなタブが `https://meet.google.com/` であることを要求し、その **タブ ID を `pendingMixSession` に保存**する。録音タブでは **保存したタブ ID** に対して Tab Capture するため、**録音開始後はドキュメントなど別タブに切り替えても、同じ Meet から音声を取り続けられる**
-- マイクは `getUserMedia({ audio: true })`。両ストリームを `audioMix.js`（`AudioContext` + `MediaStreamDestination`）でミックスしてから `MediaRecorder` に渡す
+- マイクは `getUserMedia({ audio: true })`。両ストリームを `audioMix.js`（`AudioContext` + `MediaStreamDestination`）でミックスしてから `MediaRecorder` に渡す。**タブキャプチャで Meet の音がスピーカーに出なくなる挙動への対策として、ミックス前の Meet タブ音声だけを `AudioContext.destination` へモニター出力する**（マイクはモニターしない。既定ゲイン 1、オプション `meetTabMonitorGain` で 0 に無効化可能）
 - `MediaRecorder` で約 1 秒ごとにチャンク化し、WebSocket で relay にバイナリ送信（WebM 断片）
 - Meet が記録開始時に前面でない場合はポップアップでメッセージを出し、録音タブを開かない
 
