@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>マイク録音 — Live Transcribe</title>
+  <link rel="stylesheet" href="popup.css" />
+  <style>
+    body {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .mic-title {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #1565c0;
+    }
+
+    .mic-lead {
+      margin: 0 0 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #455a64;
+    }
+
+    .mic-tip {
+      margin: 0 0 12px;
+      padding: 8px 10px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #455a64;
+      background: #e3f2fd;
+      border: 1px solid #bbdefb;
+      border-radius: 6px;
+    }
+
+    .actions-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="panel">
+    <h1 class="mic-title">マイクで文字起こし（録音タブ）</h1>
+    <p class="mic-lead">
+      録音中はこのタブを開いたままにしてください。終わったら「録音停止」を押すと接続を切ってこのタブを閉じます。
+    </p>
+    <p class="mic-tip">
+      Meet のタブを開いたままだと、こちらのタブに切り替えたときに Meet から「ピクチャーインザピクチャー」の案内が出ることがあります（拡張とは別です）。不要なら閉じるか「許可しない」でかまいません。マイクの許可ダイアログは、下のボタンを押したときだけ出ます。
+    </p>
+    <p id="docIdHint" class="hint" hidden></p>
+    <div class="actions actions-row">
+      <button id="btnAllowMic" type="button" class="btn btn-primary" disabled>
+        マイクを許可して録音開始
+      </button>
+      <button id="btnStop" type="button" class="btn btn-secondary" disabled>録音停止</button>
+    </div>
+    <p id="status" class="status" role="status">準備中…</p>
+  </main>
+  <script src="relayShared.js"></script>
+  <script src="mic.js"></script>
+</body>
+
+</html>

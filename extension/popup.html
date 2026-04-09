@@ -14,6 +14,17 @@
     <p class="guide">
       共有は「リンクを知っている全員が編集可」がおすすめです。文字起こしはドキュメントの末尾にだけ足され、すでに書いた行をシステムが上書きすることはありません。人間の補足は <code class="code-inline">[補足]</code> などで書けます（要件どおり）。
     </p>
+    <fieldset id="audioSourceField" class="source-fieldset">
+      <legend class="label legend-inline">音声の取り方</legend>
+      <label class="radio-row">
+        <input type="radio" name="audioSource" id="srcTab" value="tab" checked />
+        <span>Meet タブの音（会議で相手の声や共有音声がスピーカーから聞こえるとき）</span>
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="audioSource" id="srcMic" value="mic" />
+        <span>マイク（1人テスト向け。記録開始で録音用のタブが開き、そのタブでマイク許可）</span>
+      </label>
+    </fieldset>
     <label class="label" for="docUrl">Google ドキュメント URL</label>
     <input
       id="docUrl"
@@ -30,6 +41,7 @@
     </div>
     <p id="status" class="status" role="status">待機中</p>
   </main>
+  <script src="relayShared.js"></script>
   <script src="popup.js"></script>
 </body>
 

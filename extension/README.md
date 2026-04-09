@@ -40,6 +40,8 @@
 
 ポップアップを閉じるとキャプチャと WebSocket は止まります（後続で Service Worker / Offscreen に移せる）。
 
+**マイクモード（1人テスト向け）:** 「音声の取り方」でマイクを選んで記録開始すると、**`mic.html` を新しいタブで開き**（既定ではバックグラウンド起動）、そのタブで relay に接続したあと **「マイクを許可して録音開始」ボタン**を押したタイミングだけマイク許可を求めます（Meet のピクチャーインザピクチャー案内と同時に出にくくするため）。停止は録音タブの「録音停止」で、押すとタブも閉じます。
+
 ## Phase 7 までに含まれるもの（relay 側）
 
 - `GOOGLE_APPLICATION_CREDENTIALS` を設定したとき、relay が受け取った WebM を ffmpeg で PCM 化し、**Google Cloud Speech-to-Text** で文字起こし（同期 recognize、確定テキストのみ扱う）

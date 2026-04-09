@@ -1,14 +1,16 @@
 /**
  * Phase 2: ポップアップ UI と URL 検証。
  * Phase 5: ローカル中継へ WebSocket。
- * Phase 6: Google Meet タブの Tab Capture 音声を MediaRecorder でチャンク化し relay へ送信。
+ * Phase 6: Tab Capture またはマイクを MediaRecorder でチャンク化し relay へ送信。
  */
-
-const RELAY_WS_URL = "ws://127.0.0.1:8765";
 
 const STORAGE_KEYS = {
   lastDocUrl: "lastDocUrl",
   recording: "recording",
+  /** `"tab"` | `"mic"` */
+  audioSource: "audioSource",
+  /** マイクモードで mic.html が読み取る一時セッション */
+  pendingMicSession: "pendingMicSession",
 };
 
 const docUrlInput = document.getElementById("docUrl");
@@ -16,6 +18,7 @@ const docIdHint = document.getElementById("docIdHint");
 const btnStart = document.getElementById("btnStart");
 const btnStop = document.getElementById("btnStop");
 const statusEl = document.getElementById("status");
+const audioSourceField = document.getElementById("audioSourceField");
 
 /** @type {WebSocket | null} */
 let relaySocket = null;
@@ -56,12 +59,21 @@ function updateDocIdHint(url) {
 function applyRecordingUi(isRecording) {
   btnStart.disabled = isRecording;
   btnStop.disabled = !isRecording;
+  if (audioSourceField) {
+    audioSourceField.disabled = isRecording;
+  }
   if (!isRecording) {
     setStatus("待機中");
   }
 }
 
-function stopTabCapture() {
+/** @returns {"tab" | "mic"} */
+function getAudioSource() {
+  const el = document.querySelector('input[name="audioSource"]:checked');
+  return el?.value === "mic" ? "mic" : "tab";
+}
+
+function stopAudioCapture() {
   if (mediaRecorder) {
     try {
       if (mediaRecorder.state !== "inactive") {
@@ -76,6 +88,29 @@ function stopTabCapture() {
     captureStream.getTracks().forEach((t) => t.stop());
     captureStream = null;
   }
+}
+
+/**
+ * MediaRecorder を組み立てて relay へバイナリ送信する（Meet タブキャプチャ用）。
+ * @param {MediaStream} stream
+ * @returns {Promise<{ ok: true } | { ok: false, message: string }>}
+ */
+async function startMediaRecorderOnStream(stream) {
+  captureStream = stream;
+  const socket = relaySocket;
+  if (!socket) {
+    stream.getTracks().forEach((t) => t.stop());
+    captureStream = null;
+    return { ok: false, message: "中継に接続していません" };
+  }
+  const r = await window.ltgStartMediaRecorder(socket, stream);
+  if (!r.ok) {
+    stream.getTracks().forEach((t) => t.stop());
+    captureStream = null;
+    return r;
+  }
+  mediaRecorder = r.mediaRecorder;
+  return { ok: true };
 }
 
 /**
@@ -121,9 +156,10 @@ async function getMeetTargetTabId() {
 }
 
 /**
+ * Google Meet タブの出力音（タブキャプチャ）。
  * @returns {Promise<{ ok: true } | { ok: false, message: string }>}
  */
-async function startMeetAudioCapture() {
+async function startMeetTabAudioCapture() {
   const tabId = await getMeetTargetTabId();
   if (tabId == null) {
     return {
@@ -154,8 +190,9 @@ async function startMeetAudioCapture() {
     video: false,
   };
 
+  let stream;
   try {
-    captureStream = await navigator.mediaDevices.getUserMedia(
+    stream = await navigator.mediaDevices.getUserMedia(
       /** @type {MediaStreamConstraints} */ (constraints),
     );
   } catch (e) {
@@ -166,53 +203,15 @@ async function startMeetAudioCapture() {
     };
   }
 
-  const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-    ? "audio/webm;codecs=opus"
-    : MediaRecorder.isTypeSupported("audio/webm")
-      ? "audio/webm"
-      : "";
+  return startMediaRecorderOnStream(stream);
+}
 
-  const recorderOptions = mimeType ? { mimeType } : {};
-  try {
-    mediaRecorder = new MediaRecorder(captureStream, recorderOptions);
-  } catch (e) {
-    const err = e instanceof Error ? e : new Error(String(e));
-    captureStream.getTracks().forEach((t) => t.stop());
-    captureStream = null;
-    return {
-      ok: false,
-      message: `MediaRecorder を開始できませんでした: ${err.message}`,
-    };
-  }
-
-  mediaRecorder.addEventListener("dataavailable", async (ev) => {
-    if (!ev.data || ev.data.size === 0) {
-      return;
-    }
-    const socket = relaySocket;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      return;
-    }
-    const buf = await ev.data.arrayBuffer();
-    socket.send(buf);
-  });
-
-  mediaRecorder.addEventListener("error", (ev) => {
-    console.error("[popup] MediaRecorder error", ev);
-  });
-
-  const sliceMs = 1000;
-  try {
-    mediaRecorder.start(sliceMs);
-  } catch (e) {
-    const err = e instanceof Error ? e : new Error(String(e));
-    stopTabCapture();
-    return {
-      ok: false,
-      message: `録音の開始に失敗しました: ${err.message}`,
-    };
-  }
-  return { ok: true };
+/**
+ * Meet タブの音声のみ（マイクは mic.html で扱う）。
+ * @returns {Promise<{ ok: true } | { ok: false, message: string }>}
+ */
+async function startRelayAudioCapture() {
+  return startMeetTabAudioCapture();
 }
 
 /**
@@ -222,14 +221,14 @@ async function startMeetAudioCapture() {
 function failSession(message) {
   closeStatusOverride = message;
   relayCloseRequested = true;
-  stopTabCapture();
+  stopAudioCapture();
   if (relaySocket) {
     relaySocket.close();
   }
 }
 
 function disconnectRelay() {
-  stopTabCapture();
+  stopAudioCapture();
   if (!relaySocket) {
     return;
   }
@@ -240,7 +239,7 @@ function disconnectRelay() {
 
 function connectRelay(documentId) {
   relayCloseRequested = false;
-  const socket = new WebSocket(RELAY_WS_URL);
+  const socket = new WebSocket(window.LTG_RELAY_WS_URL);
   relaySocket = socket;
 
   socket.addEventListener("open", () => {
@@ -250,7 +249,7 @@ function connectRelay(documentId) {
         documentId,
       }),
     );
-    setStatus("記録中（中継と接続済み。Meet 音声の準備を待っています）");
+    setStatus("記録中（中継と接続済み。音声の準備を待っています）");
   });
 
   socket.addEventListener("message", async (event) => {
@@ -266,7 +265,7 @@ function connectRelay(documentId) {
       if (msg && msg.type === "ack") {
         setStatus("記録中（Meet のタブ音声を準備しています）");
         try {
-          const result = await startMeetAudioCapture();
+          const result = await startRelayAudioCapture();
           if (!result.ok) {
             failSession(result.message);
             return;
@@ -277,7 +276,7 @@ function connectRelay(documentId) {
         } catch (e) {
           console.error(e);
           const err = e instanceof Error ? e : new Error(String(e));
-          failSession(`タブ音声の取得に失敗しました: ${err.message}`);
+          failSession(`音声の取得に失敗しました: ${err.message}`);
         }
       }
     } catch {
@@ -316,9 +315,18 @@ function connectRelay(documentId) {
 async function loadState() {
   await chrome.storage.local.set({ [STORAGE_KEYS.recording]: false });
 
-  const data = await chrome.storage.local.get([STORAGE_KEYS.lastDocUrl]);
+  const data = await chrome.storage.local.get([
+    STORAGE_KEYS.lastDocUrl,
+    STORAGE_KEYS.audioSource,
+  ]);
   if (data[STORAGE_KEYS.lastDocUrl]) {
     docUrlInput.value = data[STORAGE_KEYS.lastDocUrl];
+  }
+  const srcMic = document.getElementById("srcMic");
+  const srcTab = document.getElementById("srcTab");
+  if (data[STORAGE_KEYS.audioSource] === "mic" && srcMic && srcTab) {
+    srcMic.checked = true;
+    srcTab.checked = false;
   }
   updateDocIdHint(docUrlInput.value);
   applyRecordingUi(false);
@@ -340,9 +348,37 @@ btnStart.addEventListener("click", async () => {
     return;
   }
 
+  if (getAudioSource() === "mic") {
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.lastDocUrl]: url,
+      [STORAGE_KEYS.audioSource]: "mic",
+      [STORAGE_KEYS.pendingMicSession]: { documentId },
+      [STORAGE_KEYS.recording]: true,
+    });
+    setStatus("マイク録音用のタブを開いています…");
+    try {
+      await chrome.tabs.create({
+        url: chrome.runtime.getURL("mic.html"),
+        active: false,
+      });
+    } catch (e) {
+      console.error(e);
+      await chrome.storage.local.remove(STORAGE_KEYS.pendingMicSession);
+      await chrome.storage.local.set({ [STORAGE_KEYS.recording]: false });
+      setStatus("タブを開けませんでした。もう一度お試しください。");
+      return;
+    }
+    setStatus(
+      "マイク録音用のタブを開きました。タブバーで「マイク録音」と出たタブを選び、表示された手順どおりに進んでください（このポップアップは閉じてかまいません）。",
+    );
+    applyRecordingUi(false);
+    return;
+  }
+
   await chrome.storage.local.set({
     [STORAGE_KEYS.lastDocUrl]: url,
     [STORAGE_KEYS.recording]: true,
+    [STORAGE_KEYS.audioSource]: "tab",
   });
   applyRecordingUi(true);
   setStatus("中継に接続しています…");

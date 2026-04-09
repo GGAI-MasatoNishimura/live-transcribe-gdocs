@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Live Transcribe to Google Docs",
-  "version": "0.0.8",
+  "version": "0.0.14",
   "description": "MVP: Meet 音声を文字起こしし Google ドキュメントへ追記（段階的実装中）。",
   "permissions": ["storage", "tabCapture", "tabs", "activeTab"],
   "host_permissions": [

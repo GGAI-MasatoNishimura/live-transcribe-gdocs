@@ -75,6 +75,39 @@ body {
   word-break: break-all;
 }
 
+.source-fieldset {
+  margin: 0 0 12px;
+  padding: 8px 10px 10px;
+  border: 1px solid #eceff1;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.source-fieldset:disabled {
+  opacity: 0.65;
+}
+
+.legend-inline {
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.radio-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #455a64;
+  cursor: pointer;
+}
+
+.radio-row input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
 .actions {
   display: flex;
   gap: 8px;
