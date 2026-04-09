@@ -38,13 +38,18 @@ export async function transcribeLinear16Pcm(pcmBuffer, sampleRateHz = 16000) {
 
   const maxAttempts = 3;
   let lastErr;
+  const languageCode = process.env.RELAY_STT_LANGUAGE ?? "ja-JP";
+  const model = process.env.RELAY_STT_MODEL?.trim();
+
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const [response] = await speechClient.recognize({
         config: {
           encoding: "LINEAR16",
           sampleRateHertz: sampleRateHz,
-          languageCode: "ja-JP",
+          audioChannelCount: 1,
+          languageCode,
+          ...(model ? { model } : {}),
           enableAutomaticPunctuation: true,
         },
         audio: {
@@ -58,6 +63,12 @@ export async function transcribeLinear16Pcm(pcmBuffer, sampleRateHz = 16000) {
         if (t) {
           parts.push(t);
         }
+      }
+      if (parts.length === 0) {
+        const n = response.results?.length ?? 0;
+        console.log(
+          `[relay] STT: API は応答したが transcript が空（results=${n}）。PCM が無音に近い、言語コード（RELAY_STT_LANGUAGE）、またはモデル（RELAY_STT_MODEL）の不一致の可能性があります。`,
+        );
       }
       return parts.length ? parts.join(" ") : null;
     } catch (e) {
