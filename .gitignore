@@ -1,1 +1,4 @@
 relay/node_modules/
+
+# サービスアカウント JSON はコミットしない（中身は secrets/ に置く）
+secrets/*.json
